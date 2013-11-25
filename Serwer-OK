@@ -1,0 +1,367 @@
+#include <winsock2.h>
+#include <iostream>
+#include <stdlib.h>
+#include <string>
+#include <fstream>
+#include <cstdlib>
+#include <sstream>
+#include <conio.h>
+
+#define MAX_CLIENTS     20
+HANDLE hMutex=NULL;
+using namespace std;
+
+class data
+    {
+        public:
+            string userid;
+            string name;
+            string lastName;
+            int age;
+            int phone;
+    };
+
+bool openTheFileCheck( string theFile )
+{
+    ifstream file;
+    file.open( theFile.c_str() );
+    if( !file.good() )
+         return false;
+    string line;
+    while( getline( file, line ) )
+         file.close();
+    return true;
+}
+
+void fillData(string & tekst, data catalog[])
+{
+    string szukanaFraza, dozamiany;
+
+    szukanaFraza="</name>";
+    size_t znalezionaPozycja = tekst.find( szukanaFraza );
+    if( znalezionaPozycja != string::npos )
+    {
+        int x;
+        catalog[0].name.clear();
+        x=znalezionaPozycja;
+        znalezionaPozycja = tekst.find( szukanaFraza, znalezionaPozycja + szukanaFraza.length() );
+        catalog[0].name.insert (0, tekst ,szukanaFraza.length()-1, x-szukanaFraza.length()+1);
+    }
+
+    szukanaFraza="</lastname>";
+    znalezionaPozycja = tekst.find( szukanaFraza );
+    if( znalezionaPozycja != string::npos )
+    {
+        int x;
+        x=znalezionaPozycja;
+        catalog[0].lastName.clear();
+        znalezionaPozycja = tekst.find( szukanaFraza, znalezionaPozycja + szukanaFraza.length() );
+        catalog[0].lastName.insert (0, tekst ,szukanaFraza.length()-1, x-szukanaFraza.length()+1);
+    }
+
+    szukanaFraza="</age>";
+    znalezionaPozycja = tekst.find( szukanaFraza );
+    if( znalezionaPozycja != string::npos )
+    {
+        int x;
+        x=znalezionaPozycja;
+        znalezionaPozycja = tekst.find( szukanaFraza, znalezionaPozycja + szukanaFraza.length() );
+        dozamiany.insert (0, tekst ,szukanaFraza.length()-1, x-szukanaFraza.length()+1);
+        catalog[0].age=atoi(dozamiany.c_str());
+    }
+
+    szukanaFraza="</phone>";
+    znalezionaPozycja = tekst.find( szukanaFraza );
+    if( znalezionaPozycja != string::npos )
+    {
+        int x;
+        x=znalezionaPozycja;
+        znalezionaPozycja = tekst.find( szukanaFraza, znalezionaPozycja + szukanaFraza.length() );
+        dozamiany.insert (0, tekst ,szukanaFraza.length()-1, x-szukanaFraza.length()+1);
+        catalog[0].phone=atoi(dozamiany.c_str());
+    }
+
+    szukanaFraza="</userid>";
+    znalezionaPozycja = tekst.find( szukanaFraza );
+    if( znalezionaPozycja != string::npos )
+    {
+        int x;
+        catalog[0].userid.clear();
+        x=znalezionaPozycja;
+        znalezionaPozycja = tekst.find( szukanaFraza, znalezionaPozycja + szukanaFraza.length() );
+        catalog[0].userid.insert (0, tekst ,szukanaFraza.length()-1, x-szukanaFraza.length()+1);
+    }
+}
+
+// client context
+struct ClientContext
+{
+    HANDLE thread;
+    SOCKET sock;
+    int  id;
+};
+
+void ShutdownServer()
+{
+    // servers socket
+    SOCKET          sock;
+    ClientContext   clients[MAX_CLIENTS];
+    // close inclosed sockets
+    for (int i = 0; i < MAX_CLIENTS; i++)
+        if (clients[i].sock != INVALID_SOCKET)
+        {
+            closesocket (clients[i].sock);
+            clients[i].sock = INVALID_SOCKET;
+        }
+
+    closesocket (sock);
+    sock = INVALID_SOCKET;
+}
+
+/****************************************************WATEK!!!!!!!!!!!!!***********************************************************/
+DWORD WINAPI processClient (LPVOID ctx)
+{
+    ClientContext *context = (ClientContext*)ctx;
+    string strpaylod,userOk="OK paylod: ", whiteSign=" ",userAge, age=" age:",userPhone, phone="phone:";
+    char receivedMessage[128], quit[]="q",wrightId[32], paylod[128],addUser[]="a";
+    char newUserName[128], newUserSurname[128], newUserAge[32],newUserPhoneNumber[32], newUserId[32];
+    int ret, receivedMessageLength, replyLength;
+    data catalog[1];          //array with all datas
+
+
+    cout << "New client " << context->id << " connected!\n";
+
+    while (1)
+    {
+        ret = recv(context->sock, receivedMessage, sizeof(receivedMessage), 0);
+
+        if (ret == 0)
+        {
+            cout << "Client closed connection.\n";
+            break;
+        }
+
+        receivedMessageLength = ret;    // display message from client
+        receivedMessage[receivedMessageLength] = '\0';
+
+        if(strcmp(receivedMessage,quit) == 0)
+        {
+            replyLength = strlen("Quit");
+            ret = send(context->sock, "Quit", replyLength, 0);
+            break;
+        }
+
+
+        if(strcmp(receivedMessage,addUser) == 0)                         //user adding
+        {
+            memset( receivedMessage, '\0', 128 );
+            replyLength = strlen("Write name");
+            ret = send(context->sock, "Write name", replyLength, 0);
+            ret = recv(context->sock, receivedMessage, sizeof(receivedMessage)+2, 0);
+            memcpy(newUserName, receivedMessage, strlen(receivedMessage)+1);
+            memset( receivedMessage, '\0', 128 );
+
+            replyLength = strlen("Write last name");
+            ret = send(context->sock, "Write last name", replyLength, 0);
+            ret = recv(context->sock, receivedMessage, sizeof(receivedMessage)+2, 0);
+            memcpy(newUserSurname, receivedMessage, strlen(receivedMessage)+1);
+            memset( receivedMessage, '\0', 128 );
+
+            replyLength = strlen("Write age");
+            ret = send(context->sock, "Write age", replyLength, 0);
+            ret = recv(context->sock, receivedMessage, sizeof(receivedMessage)+2, 0);
+            memcpy(newUserAge, receivedMessage, strlen(receivedMessage)+1);
+            memset( receivedMessage, '\0', 128 );
+
+            replyLength = strlen("Write phone number");
+            ret = send(context->sock, "Write phone number", replyLength, 0);
+            ret = recv(context->sock, receivedMessage, sizeof(receivedMessage)+2, 0);
+            memcpy(newUserPhoneNumber, receivedMessage, strlen(receivedMessage)+1);
+            memset( receivedMessage, '\0', 128 );
+
+            replyLength = strlen("Write userid");
+            ret = send(context->sock, "Write userid", replyLength, 0);
+            ret = recv(context->sock, receivedMessage, sizeof(receivedMessage)+2, 0);
+            memcpy(newUserId, receivedMessage, strlen(receivedMessage)+1);
+            memset( receivedMessage, '\0', 128 );
+
+
+            WaitForSingleObject(hMutex, INFINITE);
+            ofstream wpisz("cpp0x.txt", ios::app);
+            if (wpisz.good())
+                {
+                    wpisz<<"<user>"<<endl;
+                    wpisz<<"<name>"<<newUserName<<"</name>"<<endl;
+                    wpisz.flush();
+
+                    wpisz<<"<lastname>"<<newUserSurname<<"</lastname>"<<endl;
+                    wpisz.flush();
+
+                    wpisz<<"<age>"<<newUserAge<<"</age>"<<endl;
+                    wpisz.flush();
+
+                    wpisz<<"<phone>"<<newUserPhoneNumber<<"</phone>"<<endl;
+                    wpisz.flush();
+
+                    wpisz<<"<userid>"<<newUserId<<"</userid>"<<endl;
+                    wpisz.flush();
+                    wpisz<<"</user>"<<endl;
+                    wpisz.flush();
+
+                    replyLength = strlen("Data seved. UserId, q-quit, a-add user:");
+                    ret = send(context->sock, "Data saved. UserId, q-quit, a-add user:", replyLength, 0);
+
+                    wpisz.close();
+                    ReleaseMutex (hMutex);
+                    continue;
+                }
+        }
+
+
+if( !openTheFileCheck( "cpp0x.txt" ) )
+    {
+        cout<<"Cannot open file with data."<<endl;
+    }
+
+    ifstream file;
+    string dataFile = "cpp0x.txt";
+    file.open( dataFile.c_str() );
+    string line;
+
+    while( getline( file, line ) )
+    {
+        fillData(line, catalog);
+        memset( wrightId, '\0', 32 );
+        catalog[0].userid.copy( wrightId, catalog[0].userid.length());
+        if (strcmp(receivedMessage,wrightId) == 0)
+        {
+            ostringstream age;
+            age << catalog[0].age;
+            userAge = age.str();
+            ostringstream phone;
+            phone << catalog[0].phone;
+            userPhone = phone.str();
+            break;
+        }
+
+    }
+    file.close();
+
+
+        if (strcmp(receivedMessage,wrightId) != 0)     //sprawdzenie czy poprawne user id
+        {
+            replyLength = strlen("Unknown");
+            ret = send(context->sock, "Unknown", replyLength, 0);
+            continue;
+        }
+
+        strpaylod=userOk+catalog[0].name+whiteSign+catalog[0].lastName+whiteSign+age+userAge+whiteSign+phone+userPhone;
+        memset( paylod, '\0', 128 );
+        strpaylod.copy( paylod, strpaylod.length());
+
+        replyLength = strlen(paylod);
+        ret = send(context->sock, paylod, replyLength, 0);
+
+    }
+    context->thread = NULL;
+    return 0;
+}
+
+
+/**************************************************************WATEK END!!!!!!!!!!!!!!!!!!!!!!!!!!!*******************************************************/
+int main(int argc, char* argv[])
+{
+    ClientContext   clients[MAX_CLIENTS];   // clients
+    SOCKET          sock;   // server socket
+    WSADATA         wsaData;
+    SOCKADDR_IN     saddr;
+    SOCKET          client;
+    int             newId, port=2000;
+
+    for (int i = 0; i < MAX_CLIENTS; i ++)      // reseting clients context
+    {
+        clients[i].thread = NULL;
+        clients[i].sock   = INVALID_SOCKET;
+        clients[i].id     = -1;
+    }
+
+    WSAStartup( MAKEWORD(2,2), &wsaData );      //server starting
+
+    sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    memset( (void*)&saddr, 0, sizeof(saddr) );
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = htons(port);               //port number, network byte order
+    saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if ( bind(sock, (sockaddr*)&saddr, sizeof(saddr)) == SOCKET_ERROR )
+    {
+        cout << "Binding address failed\n";
+        return -1;
+    }
+
+    if (listen(sock, MAX_CLIENTS) == SOCKET_ERROR)
+    {
+        cout << "Listen mode failed\n";
+        closesocket (sock);
+        return -2;
+    }
+
+    while (1)
+    {
+        client = accept(sock, NULL, NULL);      // accept new client
+
+         // searching free slot
+            newId = -1;
+            for (int i = 0; i < MAX_CLIENTS; i ++)
+                if (clients[i].sock == INVALID_SOCKET)
+                {
+                    newId = i;
+                    break;
+                }
+
+            if (newId == -1)
+            {
+                cout << "Server cannot connect more than " << MAX_CLIENTS << endl;
+            }
+            else
+            {
+                // adding new client and starting new thread
+                hMutex=CreateMutex(NULL, false,NULL);
+                clients[newId].sock   = client;
+                clients[newId].id     = newId;
+                clients[newId].thread = CreateThread (NULL, 0, processClient, (LPVOID)&clients[newId], 0, NULL);
+
+                // thread creating failed
+                if (clients[newId].thread == NULL)
+                {
+                    clients[newId].sock = INVALID_SOCKET;
+                    clients[newId].id   = -1;
+                    cout << "Cannot create new thread." << endl;
+                }
+            }
+
+    }
+
+    // server finished work
+    HANDLE threads[MAX_CLIENTS];
+    int threadsCount = 0;
+
+    // fills array
+    for (int i = 0; i < MAX_CLIENTS; i++)
+        if (clients[i].thread != NULL)
+        {
+            threads[threadsCount] = clients[i].thread;
+            threadsCount ++;
+        }
+
+        for (int i = 0; i < MAX_CLIENTS; i ++)
+            TerminateThread (threads[i], 2);
+
+    ReleaseMutex (hMutex);
+
+    closesocket(sock);
+    WSACleanup();
+    ShutdownServer();
+    system("pause");
+    return 0;
+}
